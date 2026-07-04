@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
   schedule:
-    # Every day at 18:00 Bangladesh time (12:00 UTC)
+    # 18:00 Bangladesh = 12:00 UTC
     - cron: "0 12 * * *"
 
 permissions:
@@ -15,11 +15,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -31,13 +29,16 @@ jobs:
       - name: Run scraper
         run: python scrape.py
 
-      - name: Commit updated CSV
+      - name: Commit if changed
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@users.noreply.github.com"
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
 
           git add balance.csv
 
-          git diff --cached --quiet || git commit -m "Update balance history"
-
-          git push
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Update NESCO balance"
+            git push
+          fi

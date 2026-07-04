@@ -1,6 +1,7 @@
 from playwright.sync_api import sync_playwright
-import csv
 from pathlib import Path
+from datetime import datetime, timezone
+import csv
 
 URL = "https://customer.nesco.gov.bd/pre/panel"
 CONSUMER = "36003567"
@@ -9,6 +10,7 @@ CONSUMER = "36003567"
 def get_balance():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+
         page = browser.new_page()
 
         page.goto(URL, wait_until="networkidle")
@@ -17,7 +19,8 @@ def get_balance():
         page.click("#recharge_hist_button")
 
         balance_label = page.locator(
-            "label", has_text="অবশিষ্ট ব্যালেন্স"
+            "label",
+            has_text="অবশিষ্ট ব্যালেন্স"
         )
 
         timestamp = (
@@ -29,31 +32,64 @@ def get_balance():
 
         balance = (
             balance_label
-            .locator("xpath=following-sibling::div[1]//input")
+            .locator(
+                "xpath=following-sibling::div[1]//input"
+            )
             .input_value()
             .strip()
         )
 
         browser.close()
 
-        return timestamp, balance
+    return timestamp, balance
 
 
 timestamp, balance = get_balance()
 
-print(timestamp)
-print(balance)
+checked_at = datetime.now(timezone.utc).isoformat()
 
 csv_file = Path("balance.csv")
 
-new_file = not csv_file.exists()
+new_row = [
+    checked_at,
+    timestamp,
+    balance,
+]
 
-with csv_file.open("a", newline="", encoding="utf-8") as f:
-    writer = csv.writer(f)
+last_row = None
 
-    if new_file:
-        writer.writerow(["Timestamp", "Balance"])
+if csv_file.exists():
+    with csv_file.open(
+        "r",
+        newline="",
+        encoding="utf-8",
+    ) as f:
+        rows = list(csv.reader(f))
 
-    writer.writerow([timestamp, balance])
+        if len(rows) > 1:
+            last_row = rows[-1]
 
-print("Saved to balance.csv")
+# Compare only timestamp + balance
+if last_row and last_row[1:] == new_row[1:]:
+    print("No change detected.")
+else:
+    new_file = not csv_file.exists()
+
+    with csv_file.open(
+        "a",
+        newline="",
+        encoding="utf-8",
+    ) as f:
+
+        writer = csv.writer(f)
+
+        if new_file:
+            writer.writerow([
+                "Checked At (UTC)",
+                "NESCO Timestamp",
+                "Balance (Tk)",
+            ])
+
+        writer.writerow(new_row)
+
+    print("New balance saved.")
